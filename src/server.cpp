@@ -252,7 +252,6 @@ void server::enable_swagger(const char *swagger_entrypoint) {
         json_swagger["paths"] = std::move(paths);
 
         std::string body = boost::json::serialize(json_swagger);
-        // std::cout << body << std::endl;
 
         response.set(beauty::http::field::access_control_allow_origin, "*");
         response.set(beauty::content_type::application_json);
@@ -263,7 +262,6 @@ void server::enable_swagger(const char *swagger_entrypoint) {
 void server::use(middleware_fn fn) { _router.use(std::move(fn)); }
 
 server &server::get(const std::string &path, route_cb &&cb) {
-  // Be explicit: explicitly construct the vector to clear the ambiguity
   return get(path, std::vector<beauty::middleware_fn>{}, std::move(cb));
 }
 
