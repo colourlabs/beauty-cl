@@ -35,6 +35,7 @@ add_library(beauty
     ./timer.cpp
     ./url.cpp
     ./utils.cpp
+    ./sse_stream.cpp
 )
 
 add_library(beauty::beauty ALIAS beauty)

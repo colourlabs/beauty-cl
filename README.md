@@ -1,15 +1,21 @@
 <div align="center">
   <img alt="A Rose" src="https://github.com/dfleury2/beauty/raw/master/docs/rose.png" height="180" />
   <br>
-  A simple Http server and client above <a href="https://github.com/boostorg/beast">Boost.Beast</a>
+  A simple HTTP server and client above <a href="https://github.com/boostorg/beast">Boost.Beast</a>
 </div>
 <br>
 
-Beauty is a layer above <a href="https://github.com/boostorg/beast">Boost.Beast</a> which provide facilities to create Http server or client. Beauty allows the creation of synchronous or asynchronous server and client, and adds some signals and timer management based on <a href="https://github.com/boostorg/asio">Boost.Asio</a>
+> **this is a fork of [dfleury2/beauty](https://github.com/dfleury2/beauty) with some more features :**
+> - server-sent events (SSE) with resume support, heartbeat, and backpressure
+> - async middleware chain (C++20 coroutines)
+>
+> requires C++20.
+
+Beauty is a layer above <a href="https://github.com/boostorg/beast">Boost.Beast</a> which provide facilities to create HTTP server or client. Beauty allows the creation of synchronous or asynchronous server and client, and adds some signals and timer management based on <a href="https://github.com/boostorg/asio">Boost.Asio</a>
 
 ## Features
-- Http or Http/s server or client side
-- Websocket (no TLS yet) for server and client (still experimental)
+- HTTP or HTTPS server or client side
+- WebSocket (no TLS yet) for server and client (still experimental)
 - Synchronous or Asynchronous API
 - Timeout support
 - Postponed response from server support
@@ -17,6 +23,8 @@ Beauty is a layer above <a href="https://github.com/boostorg/beast">Boost.Beast<
 - Timers and signals support included
 - Startable and stoppable application event loop
 - Customizable thread pool size
+- **Server-Sent Events (SSE)** with resume, heartbeat, and backpressure
+- **Async middleware** chain with coroutine support for both global and local routes
 - Work-in-progress: Swagger description API
 
 ## Examples
@@ -124,6 +132,53 @@ int main()
 }
 
 ```
+
+- SSE server
+
+```cpp
+#include <beauty/beauty.hpp>
+
+#include <boost/asio/co_spawn.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <boost/asio/use_awaitable.hpp>
+
+int main()
+{
+    beauty::server server;
+
+    server.add_route("/events")
+        .sse(beauty::sse_handler{
+            .on_connect = [](const beauty::request&,
+                             beauty::sse_stream stream,
+                             const std::string& last_id) {
+                boost::asio::co_spawn(
+                    stream.get_executor(),
+                    [stream, last_id]() mutable -> boost::asio::awaitable {
+                        int i = 0;
+                        if (!last_id.empty()) {
+                            try { i = std::stoi(last_id) + 1; } catch (...) {}
+                        }
+
+                        boost::asio::steady_timer timer(
+                            co_await boost::asio::this_coro::executor);
+
+                        while (stream.is_open()) {
+                            stream.send_event(std::to_string(i), "update",
+                                              "hello from event " + std::to_string(i));
+                            i++;
+                            timer.expires_after(std::chrono::seconds(1));
+                            co_await timer.async_wait(boost::asio::use_awaitable);
+                        }
+                    }, boost::asio::detached);
+            }
+        });
+
+    server.listen(8085);
+    server.wait();
+}
+```
+
+SSE streams automatically send a heartbeat every 15 seconds to keep connections alive. clients that reconnect with a `Last-Event-ID` header will resume from where they left off.
 
 - timers
 
@@ -273,6 +328,47 @@ main(int argc, char* argv[])
 }
 ```
 
+- async middleware
+
+coroutine based global and route based middleware
+
+
+```cpp
+#include <beauty/beauty.hpp>
+
+int main()
+{
+  beauty::server server;
+
+  // example server wide middleware: reject requests without a valid API key
+  server.use([](auto& req, auto& res, auto next) -> boost::asio::awaitable<void> {
+      if (req["X-Api-Key"] != "secret") {
+        res.result(boost::beast::http::status::unauthorized);
+        res.body() = "Invalid API key";
+        co_return;
+      }
+
+      co_await next();
+  });
+
+  server.add_route("/hello")
+      .get([](const auto& req, auto& res) {
+          res.body() = "Hello!";
+      });
+
+  server.add_route("/")
+      .use([](auto &req, auto &res, auto next) -> boost::asio::awaitable<void> {
+        std::cout << "wow";
+        co_await next();
+      })
+      .get([](const auto& req, auto& res) {
+          res.body() = "Hello!";
+      });
+
+  server.listen(8085);
+  server.wait();
+}
+```
 
 Further examples can be found into the binaries directory at the root of the project.
 

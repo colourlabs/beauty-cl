@@ -9,10 +9,10 @@
 #include <boost/asio/ssl.hpp>
 #endif
 
-#include <vector>
-#include <thread>
-#include <optional>
 #include <atomic>
+#include <optional>
+#include <thread>
+#include <vector>
 
 namespace asio = boost::asio;
 
@@ -22,81 +22,84 @@ class timer;
 // --------------------------------------------------------------------------
 class BEAUTY_EXPORT application {
 public:
-    application();
-    explicit application(asio::io_context& ioc);
+  application();
+  explicit application(asio::io_context &ioc);
 
 #if BEAUTY_ENABLE_OPENSSL
-    explicit application(certificates&& c);
-    application(asio::io_context& ioc, certificates&& c);
+  explicit application(certificates &&c);
+  application(asio::io_context &ioc, certificates &&c);
 #endif
 
-    ~application();
+  ~application();
 
-    application(const application&) = delete;
-    application& operator=(const application&) = delete;
-    application(application&&) = delete;
-    application& operator=(application&&) = delete;
+  application(const application &) = delete;
+  application &operator=(const application &) = delete;
+  application(application &&) = delete;
+  application &operator=(application &&) = delete;
 
-    // Start the thread pool, running the event loop, not blocking
-    void start(int concurrency = 1);
+  // Start the thread pool, running the event loop, not blocking
+  void start(int concurrency = 1);
 
-    bool is_started() const { return _state == State::started; }
-    bool is_stopped() const { return _state == State::stopped; }
+  bool is_started() const { return _state == State::started; }
+  bool is_stopped() const { return _state == State::stopped; }
 
-    // Stop the event loop, reset wil cancel all current operations (timers)
-    void stop(bool reset = true);
+  // Stop the event loop, reset wil cancel all current operations (timers)
+  void stop(bool reset = true);
 
-    // Run the event loop in the current thread, blocking
-    void run();
+  // Run the event loop in the current thread, blocking
+  void run();
 
-    // Wait for the application to be stopped, blocking
-    void wait() const;
+  // Wait for the application to be stopped, blocking
+  void wait() const;
 
-    void post(std::function<void()>);
+  void post(std::function<void()>);
 
-    asio::io_context& ioc() { return is_ioc_owner() ? _ioc: *_ioc_external; }
-    bool is_ioc_owner() const noexcept { return !_ioc_external; }
+  asio::io_context &ioc() { return is_ioc_owner() ? _ioc : *_ioc_external; }
+  bool is_ioc_owner() const noexcept { return !_ioc_external; }
 
 #if BEAUTY_ENABLE_OPENSSL
-    asio::ssl::context& ssl_context() { return _ssl_context; }
+  asio::ssl::context &ssl_context() { return _ssl_context; }
 #endif
-    bool is_ssl_activated() const {
+  bool is_ssl_activated() const {
 #if BEAUTY_ENABLE_OPENSSL
-        return (bool)_certificates;
+    return (bool)_certificates;
 #else
-        return false;
+    return false;
 #endif
-    }
+  }
 
-    // Sets thread name prefix for threads started by start().
-    // Only has effect before start() is called.
-    void set_thread_name_prefix(const std::string& prefix) { _thread_name_prefix = prefix; }
+  // Sets thread name prefix for threads started by start().
+  // Only has effect before start() is called.
+  void set_thread_name_prefix(const std::string &prefix) {
+    _thread_name_prefix = prefix;
+  }
 
-    static application& Instance();
+  static application &Instance();
 #if BEAUTY_ENABLE_OPENSSL
-    static application& Instance(certificates&& c);
+  static application &Instance(certificates &&c);
 #endif
 
-    std::vector<std::shared_ptr<timer>> timers;
-        // Need for cancellation, to be improved...
+  std::vector<std::shared_ptr<timer>> timers;
+  // Need for cancellation, to be improved...
 
 private:
-    asio::io_context            _ioc;
-    asio::io_context*           _ioc_external{nullptr};
-    asio::executor_work_guard<asio::io_context::executor_type> _work;
+  asio::io_context _ioc;
+  asio::io_context *_ioc_external{nullptr};
+  asio::executor_work_guard<asio::io_context::executor_type> _work;
 #if BEAUTY_ENABLE_OPENSSL
-    asio::ssl::context          _ssl_context{asio::ssl::context::tlsv12};
-    void load_server_certificates();
-    std::optional<certificates> _certificates;
+  asio::ssl::context _ssl_context{asio::ssl::context::tlsv12};
+  void load_server_certificates();
+  std::optional<certificates> _certificates;
 #endif
 
-    std::vector<std::thread>    _threads;
+  std::vector<std::thread> _threads;
 
-    enum class State { waiting, started, stopped };
-    std::atomic<State> _state{State::waiting}; // Three State allows a good ioc.restart
-    std::atomic<int>   _active_threads{0}; // std::barrier in C++20
+  enum class State { waiting, started, stopped };
+  std::atomic<State> _state{
+      State::waiting};                 // Three State allows a good ioc.restart
+  std::atomic<int> _active_threads{0}; // std::barrier in C++20
 
-    std::string _thread_name_prefix = "beauty:wkr_";
+  std::string _thread_name_prefix = "beauty:wkr_";
 };
 
 // --------------------------------------------------------------------------
@@ -108,4 +111,4 @@ BEAUTY_EXPORT void run();
 BEAUTY_EXPORT void wait();
 BEAUTY_EXPORT void stop();
 BEAUTY_EXPORT void post(std::function<void()>);
-}
+} // namespace beauty

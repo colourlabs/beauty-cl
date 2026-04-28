@@ -1,0 +1,10 @@
+add_test_executable(
+    TEST_NAME
+        middleware
+    SOURCES
+        test_middleware.cpp
+    INCLUDES
+        ../include
+    LIBRARIES
+        beauty::beauty
+)

@@ -1,293 +1,314 @@
+#include <beauty/middleware.hpp>
 #include <beauty/server.hpp>
 
+#include <boost/beast/http/verb.hpp>
 #include <boost/json.hpp>
 
-namespace beauty
-{
+namespace beauty {
 // --------------------------------------------------------------------------
-server::server() :
-        _app(beauty::application::Instance())
-{}
+server::server() : _app(beauty::application::Instance()) {}
 
 // --------------------------------------------------------------------------
-server::server(beauty::application& app) :
-        _app(app)
-{}
+server::server(beauty::application &app) : _app(app) {}
 
 // --------------------------------------------------------------------------
-server::~server()
-{
-    stop();
-}
+server::~server() { stop(); }
 
 // --------------------------------------------------------------------------
-void
-server::listen(int port, const std::string& address)
-{
-    if (!_app.is_started()) {
-        _app.start(_concurrency);
-    }
+void server::listen(int port, const std::string &address) {
+  if (!_app.is_started()) {
+    _app.start(_concurrency);
+  }
 
-    std::vector<std::string> resolve_addresses;
-    if (address.empty()) {
-        resolve_addresses = {"::", "0.0.0.0"};
-    } else {
-        resolve_addresses = {address};
-    }
+  std::vector<std::string> resolve_addresses;
+  if (address.empty()) {
+    resolve_addresses = {"::", "0.0.0.0"};
+  } else {
+    resolve_addresses = {address};
+  }
 
-    // Two separate connections for both IPv4 and IPv6 are always created. On some operating
-    // systems depending on how the operating system is configured it's possible to open
-    // a single IPv6 socket and let it listen for IPv4 connections too. However, there is
-    // no way to query whether this behavior is enabled on runtime, so a IPv6-only sockets
-    // are forced instead (see acceptor::acceptor())
-    boost::asio::ip::tcp::resolver resolver{_app.ioc()};
-    for (const auto& resolve_address : resolve_addresses) {
-        // Resolving synchronously because errors should be propagated directly to
-        // the caller of listen()
-        auto resolved = resolver.resolve(resolve_address, std::to_string(port));
+  // Two separate connections for both IPv4 and IPv6 are always created. On some
+  // operating systems depending on how the operating system is configured it's
+  // possible to open a single IPv6 socket and let it listen for IPv4
+  // connections too. However, there is no way to query whether this behavior is
+  // enabled on runtime, so a IPv6-only sockets are forced instead (see
+  // acceptor::acceptor())
+  boost::asio::ip::tcp::resolver resolver{_app.ioc()};
+  for (const auto &resolve_address : resolve_addresses) {
+    // Resolving synchronously because errors should be propagated directly to
+    // the caller of listen()
+    auto resolved = resolver.resolve(resolve_address, std::to_string(port));
 
 #if BOOST_VERSION >= 108600
-        for (auto&& resolve : resolved) {
-            _endpoints.push_back(resolve.endpoint());
-        }
+    for (auto &&resolve : resolved) {
+      _endpoints.push_back(resolve.endpoint());
+    }
 #else
-        while (resolved != boost::asio::ip::tcp::resolver::iterator()) {
-            _endpoints.push_back(resolved->endpoint());
-            resolved++;
-        }
+    while (resolved != boost::asio::ip::tcp::resolver::iterator()) {
+      _endpoints.push_back(resolved->endpoint());
+      resolved++;
+    }
 #endif
-    }
+  }
 
-    if (_endpoints.empty()) {
-        throw std::runtime_error("No endpoints to '" + address + "' resolved");
-    }
+  if (_endpoints.empty()) {
+    throw std::runtime_error("No endpoints to '" + address + "' resolved");
+  }
 
-    // Create and launch a listening ports
-    for (auto& endpoint : _endpoints) {
-        auto acceptor = std::make_shared<beauty::acceptor>(_app, endpoint, _router);
-        _acceptors.push_back(acceptor);
-        acceptor->run();
-    }
+  // Create and launch a listening ports
+  for (auto &endpoint : _endpoints) {
+    auto acceptor = std::make_shared<beauty::acceptor>(_app, endpoint, _router);
+    _acceptors.push_back(acceptor);
+    acceptor->run();
+  }
 }
 
 // --------------------------------------------------------------------------
-void
-server::stop()
-{
-    for (const auto& acceptor : _acceptors) {
-        acceptor->stop();
-    }
-    _acceptors.clear();
-    _endpoints.clear();
-    _app.stop();
+void server::stop() {
+  for (const auto &acceptor : _acceptors) {
+    acceptor->stop();
+  }
+  _acceptors.clear();
+  _endpoints.clear();
+  _app.stop();
 }
 
 // --------------------------------------------------------------------------
-void
-server::run()
-{
-    _app.run();
+void server::run() { _app.run(); }
+
+// --------------------------------------------------------------------------
+void server::wait() { _app.wait(); }
+
+// --------------------------------------------------------------------------
+server &server::get(const std::string &path,
+                    const std::vector<middleware_fn> &m, route_cb &&cb) {
+  return get(path, {}, m, std::move(cb));
+}
+
+server &server::get(const std::string &path, const route_info &route_info,
+                    const std::vector<middleware_fn> &m, route_cb &&cb) {
+  beauty::route r(path, route_info, std::move(cb));
+  for (auto &fn : m)
+    r.use(fn);
+  _router.add_route(beast::http::verb::get, std::move(r));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-void
-server::wait()
-{
-    _app.wait();
+server &server::put(const std::string &path,
+                    const std::vector<middleware_fn> &m, route_cb &&cb) {
+  return put(path, {}, m, std::move(cb));
+}
+
+server &server::put(const std::string &path, const route_info &route_info,
+                    const std::vector<middleware_fn> &m, route_cb &&cb) {
+  beauty::route r(path, route_info, std::move(cb));
+  for (auto &fn : m)
+    r.use(fn);
+  _router.add_route(beast::http::verb::put, std::move(r));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-server&
-server::get(const std::string& path, route_cb&& cb)
-{
-    return get(path, {}, std::move(cb));
+server &server::post(const std::string &path,
+                     const std::vector<middleware_fn> &m, route_cb &&cb) {
+  return post(path, {}, m, std::move(cb));
+}
+
+server &server::post(const std::string &path, const route_info &route_info,
+                     const std::vector<middleware_fn> &m, route_cb &&cb) {
+  beauty::route r(path, route_info, std::move(cb));
+  for (auto &fn : m)
+    r.use(fn);
+  _router.add_route(beast::http::verb::post, std::move(r));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-server&
-server::get(const std::string& path, const route_info& route_info, route_cb&& cb)
-{
-    _router.add_route(
-            beast::http::verb::get,
-            beauty::route(path, route_info, std::move(cb)));
-    return *this;
+server &server::patch(const std::string &path,
+                      const std::vector<middleware_fn> &m, route_cb &&cb) {
+  return patch(path, {}, m, std::move(cb));
+}
+
+server &server::patch(const std::string &path, const route_info &route_info,
+                      const std::vector<middleware_fn> &m, route_cb &&cb) {
+  beauty::route r(path, route_info, std::move(cb));
+  for (auto &fn : m)
+    r.use(fn);
+  _router.add_route(beast::http::verb::patch, std::move(r));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-server&
-server::ws(const std::string& path, ws_handler&& handler)
-{
-    _router.add_route(
-            beast::http::verb::get,
-            beauty::route(path, std::move(handler)));
-    return *this;
+server &server::options(const std::string &path,
+                        const std::vector<middleware_fn> &m, route_cb &&cb) {
+  return options(path, {}, m, std::move(cb));
+}
+
+server &server::options(const std::string &path, const route_info &route_info,
+                        const std::vector<middleware_fn> &m, route_cb &&cb) {
+  beauty::route r(path, route_info, std::move(cb));
+  for (auto &fn : m)
+    r.use(fn);
+  _router.add_route(beast::http::verb::options, std::move(r));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-server&
-server::put(const std::string& path, route_cb&& cb)
-{
-    return put(path, {}, std::move(cb));
+server &server::del(const std::string &path,
+                    const std::vector<middleware_fn> &m, route_cb &&cb) {
+  return del(path, {}, m, std::move(cb));
+}
+
+server &server::del(const std::string &path, const route_info &route_info,
+                    const std::vector<middleware_fn> &m, route_cb &&cb) {
+  beauty::route r(path, route_info, std::move(cb));
+  for (auto &fn : m)
+    r.use(fn);
+  _router.add_route(beast::http::verb::delete_, std::move(r));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-server&
-server::put(const std::string& path, const route_info& route_info, route_cb&& cb)
-{
-    _router.add_route(
-            beast::http::verb::put,
-            beauty::route(path, route_info, std::move(cb)));
-    return *this;
+server &server::ws(const std::string &path, ws_handler &&handler) {
+  _router.add_route(beast::http::verb::get,
+                    beauty::route(path, std::move(handler)));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-server&
-server::patch(const std::string& path, route_cb&& cb)
-{
-    return patch(path, {}, std::move(cb));
+server &server::sse(const std::string &path, sse_handler &&handler) {
+  _router.add_route(beast::http::verb::get,
+                    beauty::route(path, std::move(handler)));
+  return *this;
 }
 
 // --------------------------------------------------------------------------
-server&
-server::patch(const std::string& path, const route_info& route_info, route_cb&& cb)
-{
-    _router.add_route(
-            beast::http::verb::patch,
-            beauty::route(path, route_info, std::move(cb)));
-    return *this;
-}
+void server::enable_swagger(const char *swagger_entrypoint) {
+  route_info ri;
+  ri.description = "Swagger API description entrypoint";
 
-// --------------------------------------------------------------------------
-server&
-server::post(const std::string& path, route_cb&& cb)
-{
-    return post(path, {}, std::move(cb));
-}
-
-// --------------------------------------------------------------------------
-server&
-server::post(const std::string& path, const beauty::route_info& route_info, route_cb&& cb)
-{
-    _router.add_route(
-            beast::http::verb::post,
-            beauty::route(path, route_info, std::move(cb)));
-    return *this;
-}
-
-// --------------------------------------------------------------------------
-server&
-server::options(const std::string& path, route_cb&& cb)
-{
-    return options(path, {}, std::move(cb));
-}
-
-// --------------------------------------------------------------------------
-server&
-server::options(const std::string& path, const beauty::route_info& route_info, route_cb&& cb)
-{
-    _router.add_route(
-            beast::http::verb::options,
-            beauty::route(path, route_info, std::move(cb)));
-    return *this;
-}
-
-// --------------------------------------------------------------------------
-server&
-server::del(const std::string& path, route_cb&& cb)
-{
-    return del(path, {}, std::move(cb));
-}
-
-// --------------------------------------------------------------------------
-server&
-server::del(const std::string& path, const beauty::route_info& route_info, route_cb&& cb)
-{
-    _router.add_route(
-            beast::http::verb::delete_,
-            beauty::route(path, route_info, std::move(cb)));
-    return *this;
-}
-
-// --------------------------------------------------------------------------
-void
-server::enable_swagger(const char* swagger_entrypoint)
-{
-    route_info ri;
-    ri.description = "Swagger API description entrypoint";
-
-    get(swagger_entrypoint, ri,
-        [this](const beauty::request& req, beauty::response& response) {
+  get(swagger_entrypoint, ri,
+      [this](const beauty::request &req, beauty::response &response) {
         boost::json::object json_swagger = {
             {"openapi", "3.0.1"},
-            {"info", {
-                    {"title",       _server_info.title},
-                    {"description", _server_info.description},
-                    {"version",     _server_info.version}
-                }
-            }
+            {"info",
+             {{"title", _server_info.title},
+              {"description", _server_info.description},
+              {"version", _server_info.version}}}};
+
+        auto to_lower = [](std::string s) {
+          for (auto &c : s)
+            c = std::tolower(c);
+          return s;
         };
 
-        auto to_lower = [](std::string s) { for(auto& c : s) c = std::tolower(c); return s; };
-
         boost::json::object paths;
-        for (const auto&[verb, routes] : _router) {
-            for (auto&& route : routes) {
-                boost::json::object description = {
-                        {"description", route.route_info().description}
-                };
+        for (const auto &[verb, routes] : _router) {
+          for (auto &&route : routes) {
+            boost::json::object description = {
+                {"description", route.route_info().description}};
 
-                if (!route.route_info().route_parameters.empty()) {
-                    description["parameters"] = boost::json::array();
-                    boost::json::array parameters;
-                    for (const auto& param : route.route_info().route_parameters) {
-                        parameters.push_back(boost::json::object{
-                            {"name",        param.name},
-                            {"in",          param.in},
-                            {"description", param.description},
-                            {"required",    param.required},
-                            {"schema", {
-                                {"type", param.type},
-                                {"format", param.format}
-                            }}
-                        });
-                    }
-                    description["parameters"] = std::move(parameters);
-                }
-
-                if (!route.route_info().tags.empty()) {
-                    boost::json::array tags;
-                    for (const auto& tag: route.route_info().tags) {
-                        tags.push_back(boost::json::string(tag));
-                    }
-
-                    description["tags"] = tags; 
-                }
-
-                if (!route.route_info().body.body_schemas.empty()) {
-                    boost::json::object schemas;
-                    for (const auto& schema : route.route_info().body.body_schemas) {
-                        schemas[schema.schema_name] = boost::json::object{
-                            { "schema", schema.schema }
-                        };
-                    }
-                    description["requestBody"] = boost::json::object{
-                        {"required", route.route_info().body.required },
-                        {"content", std::move(schemas) }
-                    };
-                }                
-                paths[swagger_path(route)].emplace_object()[to_lower(std::string(to_string(verb)))] = std::move(description);
+            if (!route.route_info().route_parameters.empty()) {
+              description["parameters"] = boost::json::array();
+              boost::json::array parameters;
+              for (const auto &param : route.route_info().route_parameters) {
+                parameters.push_back(boost::json::object{
+                    {"name", param.name},
+                    {"in", param.in},
+                    {"description", param.description},
+                    {"required", param.required},
+                    {"schema",
+                     {{"type", param.type}, {"format", param.format}}}});
+              }
+              description["parameters"] = std::move(parameters);
             }
+
+            if (!route.route_info().tags.empty()) {
+              boost::json::array tags;
+              for (const auto &tag : route.route_info().tags) {
+                tags.push_back(boost::json::string(tag));
+              }
+
+              description["tags"] = tags;
+            }
+
+            if (!route.route_info().body.body_schemas.empty()) {
+              boost::json::object schemas;
+              for (const auto &schema : route.route_info().body.body_schemas) {
+                schemas[schema.schema_name] =
+                    boost::json::object{{"schema", schema.schema}};
+              }
+              description["requestBody"] = boost::json::object{
+                  {"required", route.route_info().body.required},
+                  {"content", std::move(schemas)}};
+            }
+            paths[swagger_path(route)]
+                .emplace_object()[to_lower(std::string(to_string(verb)))] =
+                std::move(description);
+          }
         }
 
         json_swagger["paths"] = std::move(paths);
 
         std::string body = boost::json::serialize(json_swagger);
-        //std::cout << body << std::endl;
+        // std::cout << body << std::endl;
 
         response.set(beauty::http::field::access_control_allow_origin, "*");
         response.set(beauty::content_type::application_json);
         response.body() = std::move(body);
-    });
+      });
 }
 
+void server::use(middleware_fn fn) { _router.use(std::move(fn)); }
+
+server &server::get(const std::string &path, route_cb &&cb) {
+  // Be explicit: explicitly construct the vector to clear the ambiguity
+  return get(path, std::vector<beauty::middleware_fn>{}, std::move(cb));
 }
+
+server &server::post(const std::string &path, route_cb &&cb) {
+  return post(path, std::vector<beauty::middleware_fn>{}, std::move(cb));
+}
+
+server &server::put(const std::string &path, route_cb &&cb) {
+  return put(path, std::vector<beauty::middleware_fn>{}, std::move(cb));
+}
+
+server &server::patch(const std::string &path, route_cb &&cb) {
+  return patch(path, std::vector<beauty::middleware_fn>{}, std::move(cb));
+}
+
+server &server::options(const std::string &path, route_cb &&cb) {
+  return options(path, std::vector<beauty::middleware_fn>{}, std::move(cb));
+}
+
+server &server::del(const std::string &path, route_cb &&cb) {
+  return del(path, std::vector<beauty::middleware_fn>{}, std::move(cb));
+}
+
+server &server::get(const std::string &path, const route_info &route_info, route_cb &&cb) {
+  return get(path, route_info, {}, std::move(cb));
+}
+
+server &server::post(const std::string &path, const route_info &route_info, route_cb &&cb) {
+  return post(path, route_info, {}, std::move(cb));
+}
+
+server &server::put(const std::string &path, const route_info &route_info, route_cb &&cb) {
+  return put(path, route_info, {}, std::move(cb));
+}
+
+server &server::patch(const std::string &path, const route_info &route_info, route_cb &&cb) {
+  return patch(path, route_info, {}, std::move(cb));
+}
+
+server &server::options(const std::string &path, const route_info &route_info, route_cb &&cb) {
+  return options(path, route_info, {}, std::move(cb));
+}
+
+server &server::del(const std::string &path, const route_info &route_info, route_cb &&cb) {
+  return del(path, route_info, {}, std::move(cb));
+}
+
+} // namespace beauty

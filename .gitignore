@@ -10,3 +10,4 @@ conanbuildinfo.txt
 *.a
 conan.lock
 conaninfo.txt
+.cache

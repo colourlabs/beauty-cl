@@ -14,11 +14,7 @@
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 
-#include <iostream>
 #include <functional>
-
-namespace asio = boost::asio;
-namespace beast = boost::beast;
 
 namespace beauty
 {

@@ -18,6 +18,8 @@ set(SOURCES
     client_sync.cpp
     server.cpp
     server_long_transaction.cpp
+    beauty_sse_example.cpp
+    beauty_async_middleware.cpp
     signal.cpp
 )
 
@@ -44,8 +46,6 @@ foreach(source ${SOURCES})
         BOOST_ASIO_DISABLE_BOOST_BIND=1
         BOOST_ASIO_DISABLE_BOOST_DATE_TIME=1
         BOOST_ASIO_DISABLE_BOOST_REGEX=1
-        # Disable a bug in Asio 1.73 with gcc 10.1 and C++20
-        BOOST_ASIO_DISABLE_CONCEPTS=1
         BOOST_ASIO_NO_DEPRECATED=1
 #        BOOST_ASIO_SEPARATE_COMPILATION=1
 #        BOOST_BEAST_SEPARATE_COMPILATION=1

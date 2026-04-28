@@ -13,5 +13,5 @@
 #include <beauty/timer.hpp>
 #include <beauty/url.hpp>
 #include <beauty/base64.hpp>
-
+#include <beauty/sse_handler.hpp>
 

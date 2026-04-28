@@ -1,11 +1,11 @@
 #pragma once
 
-#include <boost/beast/http/status.hpp>
 #include <beauty/export.hpp>
+#include <boost/beast/http/status.hpp>
 
+#include <memory>
 #include <stdexcept>
 #include <string>
-#include <memory>
 
 namespace beast = boost::beast;
 
@@ -16,33 +16,38 @@ class response;
 // --------------------------------------------------------------------------
 class BEAUTY_EXPORT exception : public std::exception {
 public:
-    explicit exception(std::string message = "") : _message(std::move(message)) {}
+  explicit exception(std::string message = "") : _message(std::move(message)) {}
 
-    explicit exception(unsigned code, std::string message = "") :
-            _error_code(beast::http::int_to_status(code)),
-            _message(std::move(message)) {}
+  explicit exception(unsigned code, std::string message = "")
+      : _error_code(beast::http::int_to_status(code)),
+        _message(std::move(message)) {}
 
-    explicit exception(beast::http::status code, std::string message = "") :
-            _error_code(code),
-            _message(std::move(message)) {}
+  explicit exception(beast::http::status code, std::string message = "")
+      : _error_code(code), _message(std::move(message)) {}
 
-    [[nodiscard]] unsigned code() const noexcept { return (unsigned) _error_code; }
+  [[nodiscard]] unsigned code() const noexcept { return (unsigned)_error_code; }
 
-    [[nodiscard]] const char* what() const noexcept override { return _message.c_str(); }
+  [[nodiscard]] const char *what() const noexcept override {
+    return _message.c_str();
+  }
 
-    [[nodiscard]] std::shared_ptr<response> create_response(const request& req) const;
+  [[nodiscard]] std::shared_ptr<response>
+  create_response(const request &req) const;
 
 protected:
-    beast::http::status _error_code{beast::http::status::unknown};
-    std::string _message;
+  beast::http::status _error_code{beast::http::status::unknown};
+  std::string _message;
 };
 
 // --------------------------------------------------------------------------
 namespace http_error {
 
-#define DEFINE_BEAUTY_EXCEPTION(NAME) \
-class BEAUTY_EXPORT NAME : public beauty::exception { \
-public: explicit NAME(std::string message = "") : exception(beast::http::status::NAME, std::move(message)) {} }
+#define DEFINE_BEAUTY_EXCEPTION(NAME)                                          \
+  class BEAUTY_EXPORT NAME : public beauty::exception {                        \
+  public:                                                                      \
+    explicit NAME(std::string message = "")                                    \
+        : exception(beast::http::status::NAME, std::move(message)) {}          \
+  }
 
 // Client - 400
 namespace client {
@@ -106,7 +111,7 @@ DEFINE_BEAUTY_EXCEPTION(connection_closed_without_response);
 DEFINE_BEAUTY_EXCEPTION(unavailable_for_legal_reasons);
 DEFINE_BEAUTY_EXCEPTION(client_closed_request);
 #endif
-}
+} // namespace client
 
 // Server - 500
 namespace server {
@@ -124,8 +129,8 @@ DEFINE_BEAUTY_EXCEPTION(network_authentication_required);
 #if BOOST_VERSION < 10850
 DEFINE_BEAUTY_EXCEPTION(network_connect_timeout_error);
 #endif
-}
+} // namespace server
 
 #undef DEFINE_BEAUTY_EXCEPTION
-}
-}
+} // namespace http_error
+} // namespace beauty
