@@ -11,8 +11,6 @@
 #include <random>
 #include <regex>
 
-namespace http = boost::beast::http;
-
 namespace {
 
 //---------------------------------------------------------------------------

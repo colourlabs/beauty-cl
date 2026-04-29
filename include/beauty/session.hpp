@@ -180,7 +180,7 @@ private:
   beast::flat_buffer _buffer;
   std::unique_ptr<beast::http::request_parser<beast::http::string_body>>
       _request_parser;
-  uint64_t _body_limit{1024 * 1024 * 1024}; // 1GB default
+  uint64_t _body_limit{16 * 1024 * 1024};
 
   const beauty::router &_router;
 
