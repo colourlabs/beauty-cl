@@ -5,7 +5,7 @@
 </div>
 <br>
 
-> **this is a fork of [dfleury2/beauty](https://github.com/dfleury2/beauty) with some more features :**
+> **this is a fork of [dfleury2/beauty](https://github.com/dfleury2/beauty) with some more features:**
 > - server-sent events (SSE) with resume support, heartbeat, and backpressure
 > - async middleware chain (C++20 coroutines)
 >

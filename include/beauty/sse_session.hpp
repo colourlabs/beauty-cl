@@ -33,6 +33,7 @@ public:
                  // backpressure
                  if (me->_queue.size() > 1024) {
                    me->close();
+                   return;
                  }
 
                  bool idle = me->_queue.empty();
@@ -44,12 +45,11 @@ public:
 
   void close() {
     asio::post(_strand, [me = shared_from_this()] {
+      me->_timer.cancel();
       beast::error_code ec;
       me->_socket.shutdown(asio::ip::tcp::socket::shutdown_send, ec);
       me->_socket.close(ec);
     });
-
-    _timer.cancel();
   }
 
   auto get_executor() const { return _strand; }
@@ -87,6 +87,7 @@ private:
   void do_write() {
     if (_queue.empty())
       return;
+
     asio::async_write(
         _socket, asio::buffer(_queue.front()),
         asio::bind_executor(_strand, [me = shared_from_this()](
@@ -113,27 +114,36 @@ public:
       : _route(route), _strand(asio::make_strand(socket.get_executor())),
         _impl(std::make_shared<sse_stream_impl>(std::move(socket), _strand)) {}
 
-  void run(const beauty::request &req) {
-    _request = req;
+  void run(beauty::request req) {
+    _request = std::move(req);
 
     std::string last_event_id;
     auto it = _request.find("Last-Event-ID");
-
     if (it != _request.end()) {
       last_event_id = std::string(it->value());
     }
 
-    _impl->send("HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/event-stream\r\n"
-                "Cache-Control: no-cache\r\n"
-                "Connection: keep-alive\r\n"
-                "X-Accel-Buffering: no\r\n"
-                "\r\n");
+    beast::http::response<beast::http::empty_body> res{beast::http::status::ok,
+                                                       _request.version()};
+    res.set(beast::http::field::content_type, "text/event-stream");
+    res.set(beast::http::field::cache_control, "no-cache");
+    res.set(beast::http::field::connection, "keep-alive");
+    res.set("X-Accel-Buffering", "no");
+    res.prepare_payload();
+
+    std::ostringstream oss;
+    oss << res;
+    _impl->send(oss.str());
 
     _impl->start_heartbeat();
 
     sse_stream stream(_impl);
-    _route.sse_connect(_request, stream, last_event_id);
+    try {
+      _route.sse_connect(_request, stream, last_event_id);
+    } catch (...) {
+      _impl->close();
+      return;
+    }
 
     _impl->start_drain([me = shared_from_this()](beast::error_code ec) {
       me->_route.sse_disconnect(me->_request);

@@ -9,10 +9,10 @@ import os
 required_conan_version = ">=1.53.0"
 
 class BeautyConan(ConanFile):
-    name            = "beauty"
+    name            = "beauty-cl"
     description     = "HTTP Server above Boost.Beast"
     version         = "1.0.8"
-    url             = "https://github.com/dfleury2/beauty"
+    url             = "https://github.com/colourlabs/beauty-cl"
     license         = "MIT"
     settings        = "os", "compiler", "build_type", "arch"
     package_type    = "library"

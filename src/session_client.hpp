@@ -60,7 +60,7 @@ private:
       req_ctx->request.set(beast::http::field::user_agent,
                            BEAUTY_PROJECT_VERSION);
       req_ctx->request.prepare_payload();
-
+ 
       if (cb) {
         req_ctx->cb = std::move(*cb);
       }
@@ -243,10 +243,8 @@ public:
     // std::endl;
     if (ec) {
       std::lock_guard guard{_requests_mtx};
-
       auto req_ctx = *_requests.begin();
-      req_ctx->timer.cancel(); // will call on_timer with operator_cancelled
-
+      req_ctx->timer.cancel();
       return fail(**_requests.begin(), ec, "connect");
     }
 
@@ -346,14 +344,7 @@ public:
 
     if (ec) {
       if (ec == beauty::http::error::end_of_stream) {
-        // This is the only way to get an error on connection close from server
-        // Like a keep alive which was closed
-        // std::cout << "session_client:" << __LINE__ << " : on_read - end of
-        // stream detected, trying to reconnect" << std::endl;
-
-        // Try to reconnect
         do_resolve();
-
         return;
       } else {
         return fail(**_requests.begin(), ec, "read");
